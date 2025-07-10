@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistem CRUD Invoice Otomatis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet" />
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      .section {
+        display: none;
+      }
+      .modal-backdrop {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 40;
+      }
+      .modal {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 50;
+      }
+      /* Style untuk input file */
+      input[type="file"]::file-selector-button {
+        border-radius: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        background-color: #f3f4f6;
+        color: #1f2937;
+        border: 1px solid #d1d5db;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      input[type="file"]::file-selector-button:hover {
+        background-color: #e5e7eb;
+      }
+      /* Area khusus untuk print, tidak terlihat di layar */
+      #print-area {
+        display: none;
+      }
+
+      @media print {
+        body * {
+          visibility: hidden;
+        }
+        #print-area,
+        #print-area * {
+          visibility: visible;
+        }
+        #print-area {
+          display: block;
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+        }
+        .no-print {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 text-gray-800">
+    <div class="container mx-auto p-4 lg:p-8">
+      <h1 class="text-3xl font-bold text-center mb-8 text-[#02066F]">
+        Sistem Manajemen Invoice
+      </h1>
+
+      <!-- Daftar Invoice (READ) -->
+      <div
+        id="invoiceListSection"
+        class="section bg-white p-6 rounded-xl shadow-lg">
+        <div
+          class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <h2 class="text-2xl font-semibold text-gray-800">Daftar Invoice</h2>
+          <div
+            class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+            <input
+              type="text"
+              id="filterInput"
+              placeholder="Cari klien atau no. invoice..."
+              class="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#02066F] w-full sm:w-64" />
+            <button
+              id="showFormBtn"
+              class="w-full sm:w-auto bg-[#02066F] text-white py-2 px-5 rounded-lg hover:bg-[#010451] transition-colors font-semibold shadow whitespace-nowrap">
+              + Buat Invoice Baru
+            </button>
+          </div>
+        </div>
+
+        <!-- Kontrol Database -->
+        <div
+          class="no-print bg-gray-50 p-4 rounded-lg mb-6 flex flex-col sm:flex-row items-center gap-4 border">
+          <div class="flex-grow">
+            <label
+              for="dbLoader"
+              class="block text-sm font-medium text-gray-700 mb-1"
+              >Muat dari File (Timpa Data Saat Ini)</label
+            >
+            <input
+              type="file"
+              id="dbLoader"
+              accept=".json"
+              class="w-full text-sm" />
+          </div>
+          <div class="flex gap-3 w-full sm:w-auto">
+            <button
+              id="saveDbBtn"
+              class="w-full bg-green-600 text-white py-2.5 px-4 rounded-lg hover:bg-green-700 font-semibold shadow transition-colors duration-300">
+              Simpan Cadangan
+            </button>
+            <button
+              id="settingsBtn"
+              class="w-full bg-gray-600 text-white py-2.5 px-4 rounded-lg hover:bg-gray-700 font-semibold shadow">
+              Pengaturan
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="p-3 text-sm font-semibold uppercase text-gray-600">
+                  No. Invoice
+                </th>
+                <th class="p-3 text-sm font-semibold uppercase text-gray-600">
+                  Tanggal
+                </th>
+                <th class="p-3 text-sm font-semibold uppercase text-gray-600">
+                  Klien
+                </th>
+                <th
+                  class="p-3 text-sm font-semibold uppercase text-gray-600 text-right">
+                  Total
+                </th>
+                <th
+                  class="p-3 text-sm font-semibold uppercase text-gray-600 text-center">
+                  Status
+                </th>
+                <th
+                  class="p-3 text-sm font-semibold uppercase text-gray-600 text-center">
+                  Aksi
+                </th>
+              </tr>
+            </thead>
+            <tbody id="invoiceListBody">
+              <!-- Data diisi oleh JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Form Invoice (CREATE/UPDATE) -->
+      <div id="invoiceFormSection" class="section mt-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div class="bg-white p-6 rounded-xl shadow-lg">
+            <div class="flex justify-between items-center mb-6 border-b pb-3">
+              <h2 id="formTitle" class="text-2xl font-semibold text-gray-800">
+                Buat Invoice Baru
+              </h2>
+              <input type="hidden" id="editInvoiceId" />
+              <button
+                id="cancelBtn"
+                class="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors font-medium ml-4 no-print">
+                Batal
+              </button>
+            </div>
+
+            <div class="space-y-4 mb-6">
+              <h3 class="font-bold text-lg text-[#02066F]">Informasi Klien</h3>
+              <div>
+                <label
+                  for="clientName"
+                  class="block text-sm font-medium text-gray-700 mb-1"
+                  >Nama Klien</label
+                >
+                <input
+                  type="text"
+                  id="clientName"
+                  placeholder="Contoh: Budi Santoso"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#02066F]" />
+              </div>
+              <div>
+                <label
+                  for="clientAddress"
+                  class="block text-sm font-medium text-gray-700 mb-1"
+                  >Alamat Klien</label
+                >
+                <textarea
+                  id="clientAddress"
+                  rows="3"
+                  placeholder="Jl. Merdeka No. 123, Jakarta"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#02066F]"></textarea>
+              </div>
+            </div>
+
+            <div class="mb-6">
+              <h3 class="font-bold text-lg text-[#02066F] mb-3">
+                Detail Barang/Jasa
+              </h3>
+              <div id="itemsContainer" class="space-y-3"></div>
+              <button
+                id="addItemBtn"
+                class="mt-4 w-full bg-[#02066F] text-white py-2 px-4 rounded-lg hover:bg-[#010451] transition-colors font-medium">
+                + Tambah Barang
+              </button>
+            </div>
+
+            <div class="space-y-4">
+              <h3 class="font-bold text-lg text-[#02066F]">
+                Informasi Pembayaran
+              </h3>
+              <div>
+                <label
+                  for="paymentType"
+                  class="block text-sm font-medium text-gray-700 mb-1"
+                  >Jenis Pembayaran</label
+                >
+                <input
+                  type="text"
+                  id="paymentType"
+                  placeholder="Contoh: Transfer Bank"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#02066F]" />
+              </div>
+              <div>
+                <label
+                  for="paymentAccount"
+                  class="block text-sm font-medium text-gray-700 mb-1"
+                  >Nomor Rekening</label
+                >
+                <input
+                  type="text"
+                  id="paymentAccount"
+                  placeholder="123-456-7890"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#02066F]" />
+              </div>
+              <div>
+                <label
+                  for="paymentName"
+                  class="block text-sm font-medium text-gray-700 mb-1"
+                  >Atas Nama</label
+                >
+                <input
+                  type="text"
+                  id="paymentName"
+                  placeholder="PT Grafika Terpadu Jaya"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#02066F]" />
+              </div>
+            </div>
+
+            <div class="mt-8 pt-6 border-t space-y-3 no-print">
+              <button
+                id="saveInvoiceBtn"
+                class="w-full bg-green-600 text-white py-2.5 px-4 rounded-lg hover:bg-green-700 transition-colors font-semibold">
+                Simpan Invoice
+              </button>
+            </div>
+          </div>
+          <div id="invoice-preview-container" class="bg-gray-50">
+            <!-- Pratinjau akan dirender di sini oleh JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Area Khusus untuk Cetak (tersembunyi) -->
+    <div id="print-area"></div>
+
+    <!-- Modal Pengaturan -->
+    <div id="settingsModalBackdrop" class="modal-backdrop"></div>
+    <div
+      id="settingsModal"
+      class="modal bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
+      <h3 class="text-xl font-bold mb-6 border-b pb-3">
+        Pengaturan Informasi Brand
+      </h3>
+      <div class="space-y-4">
+        <div>
+          <label
+            for="settingsBrandName"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Nama Brand</label
+          >
+          <input
+            type="text"
+            id="settingsBrandName"
+            class="w-full p-2 border border-gray-300 rounded-lg" />
+        </div>
+        <div>
+          <label
+            for="settingsBrandLogo"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Unggah Logo Baru</label
+          >
+          <input
+            type="file"
+            id="settingsBrandLogo"
+            accept="image/*"
+            class="w-full text-sm" />
+        </div>
+        <div id="settingsLogoPreviewContainer">
+          <p class="text-sm font-medium text-gray-700">Logo Saat Ini:</p>
+          <img
+            id="settingsLogoPreview"
+            src=""
+            alt="Logo saat ini"
+            class="mt-2 h-16 border p-1 rounded" />
+        </div>
+      </div>
+      <div class="mt-8 flex justify-end space-x-3">
+        <button
+          id="cancelSettingsBtn"
+          class="bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400">
+          Batal
+        </button>
+        <button
+          id="saveSettingsBtn"
+          class="bg-[#02066F] text-white py-2 px-4 rounded-lg hover:bg-[#010451]">
+          Simpan Pengaturan
+        </button>
+      </div>
+    </div>
+
+    <!-- Modal Konfirmasi Hapus -->
+    <div id="deleteModalBackdrop" class="modal-backdrop"></div>
+    <div
+      id="deleteModal"
+      class="modal bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+      <h3 class="text-lg font-bold mb-4">Konfirmasi Hapus</h3>
+      <p>
+        Apakah Anda yakin ingin menghapus invoice ini? Tindakan ini tidak dapat
+        dibatalkan.
+      </p>
+      <div class="mt-6 flex justify-end space-x-3">
+        <button
+          id="cancelDeleteBtn"
+          class="bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400">
+          Batal
+        </button>
+        <button
+          id="confirmDeleteBtn"
+          class="bg-[#ed4b00] text-white py-2 px-4 rounded-lg hover:bg-[#c93f00]">
+          Hapus
+        </button>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // --- DOM ELEMENTS ---
+        const invoiceListSection =
+          document.getElementById("invoiceListSection");
+        const invoiceFormSection =
+          document.getElementById("invoiceFormSection");
+        const deleteModal = document.getElementById("deleteModal");
+        const deleteModalBackdrop = document.getElementById(
+          "deleteModalBackdrop"
+        );
+        const settingsModal = document.getElementById("settingsModal");
+        const settingsModalBackdrop = document.getElementById(
+          "settingsModalBackdrop"
+        );
+        const printArea = document.getElementById("print-area");
+        const showFormBtn = document.getElementById("showFormBtn");
+        const saveInvoiceBtn = document.getElementById("saveInvoiceBtn");
+        const cancelBtn = document.getElementById("cancelBtn");
+        const addItemBtn = document.getElementById("addItemBtn");
+        const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
+        const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
+        const settingsBtn = document.getElementById("settingsBtn");
+        const saveSettingsBtn = document.getElementById("saveSettingsBtn");
+        const cancelSettingsBtn = document.getElementById("cancelSettingsBtn");
+        const saveDbBtn = document.getElementById("saveDbBtn");
+        const formTitle = document.getElementById("formTitle");
+        const editInvoiceId = document.getElementById("editInvoiceId");
+        const clientNameInput = document.getElementById("clientName");
+        const clientAddressInput = document.getElementById("clientAddress");
+        const itemsContainer = document.getElementById("itemsContainer");
+        const paymentTypeInput = document.getElementById("paymentType");
+        const paymentAccountInput = document.getElementById("paymentAccount");
+        const paymentNameInput = document.getElementById("paymentName");
+        const invoicePreviewContainer = document.getElementById(
+          "invoice-preview-container"
+        );
+        const invoiceListBody = document.getElementById("invoiceListBody");
+        const filterInput = document.getElementById("filterInput");
+        const dbLoader = document.getElementById("dbLoader");
+        const settingsBrandName = document.getElementById("settingsBrandName");
+        const settingsBrandLogo = document.getElementById("settingsBrandLogo");
+        const settingsLogoPreview = document.getElementById(
+          "settingsLogoPreview"
+        );
+
+        // --- STATE ---
+        let db = {
+          settings: { name: "Nama Brand Anda", logoData: null },
+          invoices: [],
+        };
+        let invoiceToDeleteId = null;
+        let tempLogoData = null;
+        let isDataDirty = false; // Flag for unsaved changes
+        const DB_KEY = "invoiceAppDb_v2"; // Key for localStorage
+
+        // --- UTILITY FUNCTIONS ---
+        const formatCurrency = (num) =>
+          new Intl.NumberFormat("id-ID", {
+            style: "currency",
+            currency: "IDR",
+            minimumFractionDigits: 0,
+          }).format(num);
+
+        const switchView = (view) => {
+          document
+            .querySelectorAll(".section")
+            .forEach((s) => (s.style.display = "none"));
+          if (view === "list") invoiceListSection.style.display = "block";
+          if (view === "form") invoiceFormSection.style.display = "block";
+        };
+
+        const updateSaveChangesButtonState = () => {
+          if (isDataDirty) {
+            saveDbBtn.classList.remove("bg-green-600", "hover:bg-green-700");
+            saveDbBtn.classList.add(
+              "bg-orange-500",
+              "hover:bg-orange-600",
+              "animate-pulse"
+            );
+            saveDbBtn.textContent = "Simpan Perubahan!";
+          } else {
+            saveDbBtn.classList.add("bg-green-600", "hover:bg-green-700");
+            saveDbBtn.classList.remove(
+              "bg-orange-500",
+              "hover:bg-orange-600",
+              "animate-pulse"
+            );
+            saveDbBtn.textContent = "Simpan Cadangan";
+          }
+        };
+
+        const setDataDirty = () => {
+          if (!isDataDirty) {
+            isDataDirty = true;
+            updateSaveChangesButtonState();
+          }
+        };
+
+        // --- DATABASE & FILE HANDLING (HYBRID) ---
+        const saveStateToLocalStorage = () => {
+          try {
+            localStorage.setItem(DB_KEY, JSON.stringify(db));
+            setDataDirty();
+          } catch (error) {
+            console.error("Gagal menyimpan ke localStorage:", error);
+            alert(
+              "Gagal menyimpan data ke browser. Mungkin penyimpanan penuh."
+            );
+          }
+        };
+
+        const loadStateFromLocalStorage = () => {
+          const storedDb = localStorage.getItem(DB_KEY);
+          if (storedDb) {
+            try {
+              db = JSON.parse(storedDb);
+              return true;
+            } catch (error) {
+              console.error("Gagal memuat data dari localStorage:", error);
+              return false;
+            }
+          }
+          return false;
+        };
+
+        const handleLoadDbFromFile = (event) => {
+          const file = event.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const data = JSON.parse(e.target.result);
+              if (data.settings && Array.isArray(data.invoices)) {
+                db = data;
+                saveStateToLocalStorage(); // Save to local storage after loading
+                renderInvoiceList();
+                alert("Database berhasil dimuat dan disimpan di browser!");
+                isDataDirty = false; // Freshly loaded data is not dirty
+                updateSaveChangesButtonState();
+              } else {
+                throw new Error("Format file JSON tidak valid.");
+              }
+            } catch (error) {
+              alert(`Gagal memuat database: ${error.message}`);
+            }
+          };
+          reader.readAsText(file);
+        };
+
+        const downloadDbAsFile = () => {
+          const jsonString = JSON.stringify(db, null, 2);
+          const blob = new Blob([jsonString], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "database.json";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          isDataDirty = false; // Data is now synced with the downloaded file
+          updateSaveChangesButtonState();
+        };
+
+        // --- INVOICE LIST & FILTER ---
+        const renderInvoiceList = (query = "") => {
+          const lowerCaseQuery = query.toLowerCase();
+          const filteredInvoices = db.invoices.filter(
+            (inv) =>
+              inv.client.name.toLowerCase().includes(lowerCaseQuery) ||
+              inv.invoiceNumber.toLowerCase().includes(lowerCaseQuery)
+          );
+
+          invoiceListBody.innerHTML = "";
+          if (db.invoices.length === 0) {
+            invoiceListBody.innerHTML = `<tr><td colspan="6" class="text-center p-6 text-gray-500">Belum ada invoice. Silakan buat yang baru.</td></tr>`;
+            return;
+          }
+          if (filteredInvoices.length === 0 && query) {
+            invoiceListBody.innerHTML = `<tr><td colspan="6" class="text-center p-6 text-gray-500">Invoice tidak ditemukan untuk pencarian "${query}".</td></tr>`;
+            return;
+          }
+
+          filteredInvoices.sort(
+            (a, b) => new Date(b.dateISO) - new Date(a.dateISO)
+          );
+
+          filteredInvoices.forEach((inv) => {
+            const total = inv.items.reduce(
+              (sum, item) => sum + item.qty * item.price,
+              0
+            );
+            const statusClass =
+              inv.status === "Lunas"
+                ? "bg-green-100 text-green-800"
+                : "bg-orange-100 text-[#ed4b00]";
+
+            const isPaid = inv.status === "Lunas";
+            const printButtonHtml = isPaid
+              ? `<button class="print-btn text-green-600 hover:underline font-medium mr-3" data-id="${inv.id}">Cetak</button>`
+              : `<button class="text-gray-400 cursor-not-allowed font-medium mr-3" disabled>Cetak</button>`;
+
+            const row = document.createElement("tr");
+            row.className = "border-b hover:bg-gray-50";
+            row.innerHTML = `
+                    <td class="p-3 font-medium">${inv.invoiceNumber}</td>
+                    <td class="p-3">${inv.date}</td>
+                    <td class="p-3">${inv.client.name}</td>
+                    <td class="p-3 text-right">${formatCurrency(total)}</td>
+                    <td class="p-3 text-center">
+                        <span class="status-toggle cursor-pointer inline-block px-3 py-1 text-xs font-semibold rounded-full ${statusClass}" data-id="${
+              inv.id
+            }">
+                            ${inv.status}
+                        </span>
+                    </td>
+                    <td class="p-3 text-center whitespace-nowrap">
+                        ${printButtonHtml}
+                        <button class="edit-btn text-[#02066F] hover:underline font-medium mr-3" data-id="${
+                          inv.id
+                        }">Edit</button>
+                        <button class="delete-btn text-[#ed4b00] hover:underline font-medium" data-id="${
+                          inv.id
+                        }">Hapus</button>
+                    </td>
+                `;
+            invoiceListBody.appendChild(row);
+          });
+        };
+
+        // --- PREVIEW & PRINTING ---
+        const renderPreview = (invoiceData) => {
+          const total = invoiceData.items.reduce(
+            (sum, item) => sum + item.qty * item.price,
+            0
+          );
+          const itemsHtml = invoiceData.items
+            .map(
+              (item) => `
+                <tr class="border-b border-gray-200">
+                    <td class="py-3 pr-3">${item.name}</td>
+                    <td class="py-3 px-3 text-center">${item.qty}</td>
+                    <td class="py-3 px-3 text-right">${formatCurrency(
+                      item.price
+                    )}</td>
+                    <td class="py-3 pl-3 text-right font-medium">${formatCurrency(
+                      item.qty * item.price
+                    )}</td>
+                </tr>
+            `
+            )
+            .join("");
+
+          return `
+                <div class="bg-white p-8 rounded-lg max-w-4xl mx-auto">
+                    <header class="flex justify-between items-start mb-10">
+                        <div>
+                            <img src="${
+                              invoiceData.brand.logoData ||
+                              "https://placehold.co/150x50/e2e8f0/4a5568?text=Logo"
+                            }" alt="Logo Brand" class="h-12 mb-2 object-contain">
+                            <p class="font-semibold text-lg">${
+                              invoiceData.brand.name || "Nama Brand"
+                            }</p>
+                        </div>
+                        <div class="text-right">
+                            <h1 class="text-4xl font-bold text-[#02066F]">INVOICE</h1>
+                            <p class="text-sm text-gray-500">${
+                              invoiceData.invoiceNumber
+                            }</p>
+                        </div>
+                    </header>
+                    <section class="flex justify-between mb-8">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase font-semibold">Ditagihkan Kepada:</p>
+                            <p class="text-lg font-bold text-gray-800">${
+                              invoiceData.client.name
+                            }</p>
+                            <p class="text-gray-600 whitespace-pre-line">${
+                              invoiceData.client.address || "-"
+                            }</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-gray-500 uppercase font-semibold">Tanggal Invoice:</p>
+                            <p class="text-lg font-bold text-gray-800">${
+                              invoiceData.date
+                            }</p>
+                        </div>
+                    </section>
+                    <section class="w-full overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="py-2 px-3 text-xs font-semibold uppercase text-gray-600">Barang/Jasa</th>
+                                    <th class="py-2 px-3 text-xs font-semibold uppercase text-gray-600 text-center">Kuantitas</th>
+                                    <th class="py-2 px-3 text-xs font-semibold uppercase text-gray-600 text-right">Harga Satuan</th>
+                                    <th class="py-2 px-3 text-xs font-semibold uppercase text-gray-600 text-right">Jumlah</th>
+                                </tr>
+                            </thead>
+                            <tbody>${
+                              itemsHtml.length > 0
+                                ? itemsHtml
+                                : '<tr><td colspan="4" class="text-center p-4 text-gray-400">Belum ada barang.</td></tr>'
+                            }</tbody>
+                        </table>
+                    </section>
+                    <section class="flex justify-end mt-6">
+                        <div class="w-full max-w-xs">
+                            <div class="bg-gray-100 rounded-lg p-4">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-md text-gray-800">GRAND TOTAL</span>
+                                    <span class="font-bold text-xl text-[#02066F]">${formatCurrency(
+                                      total
+                                    )}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="mt-10 pt-6 border-t border-gray-200">
+                        <h4 class="text-xs text-gray-500 uppercase font-semibold mb-3">Instruksi Pembayaran</h4>
+                        <div class="text-sm text-gray-700">
+                            <p><strong>Jenis:</strong> <span>${
+                              invoiceData.payment.type || "-"
+                            }</span></p>
+                            <p><strong>No. Rekening:</strong> <span>${
+                              invoiceData.payment.account || "-"
+                            }</span></p>
+                            <p><strong>Atas Nama:</strong> <span>${
+                              invoiceData.payment.name || "-"
+                            }</span></p>
+                        </div>
+                    </section>
+                    <footer class="mt-12 text-center text-sm text-gray-500">
+                        <p>Terima kasih atas kepercayaan Anda.</p>
+                    </footer>
+                </div>
+            `;
+        };
+
+        const updateFormPreview = () => {
+          const isEditing = !!editInvoiceId.value;
+          const invoiceId = editInvoiceId.value;
+          let existingInvoice = isEditing
+            ? db.invoices.find((i) => i.id === invoiceId)
+            : null;
+
+          const items = Array.from(
+            itemsContainer.querySelectorAll(".item-row")
+          ).map((row) => ({
+            name: row.querySelector('[name="itemName"]').value,
+            qty: parseFloat(row.querySelector('[name="itemQty"]').value) || 0,
+            price:
+              parseFloat(row.querySelector('[name="itemPrice"]').value) || 0,
+          }));
+
+          const tempInvoiceData = {
+            invoiceNumber: isEditing
+              ? existingInvoice.invoiceNumber
+              : generateInvoiceNumber(),
+            date: isEditing
+              ? existingInvoice.date
+              : new Date().toLocaleDateString("id-ID", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                }),
+            brand: db.settings,
+            client: {
+              name: clientNameInput.value,
+              address: clientAddressInput.value,
+            },
+            items,
+            payment: {
+              type: paymentTypeInput.value,
+              account: paymentAccountInput.value,
+              name: paymentNameInput.value,
+            },
+          };
+          invoicePreviewContainer.innerHTML = renderPreview(tempInvoiceData);
+        };
+
+        const handlePrintInvoice = (id) => {
+          const invoice = db.invoices.find((inv) => inv.id === id);
+          if (!invoice) return;
+          const fullInvoiceData = { ...invoice, brand: db.settings };
+          printArea.innerHTML = renderPreview(fullInvoiceData);
+          setTimeout(() => window.print(), 200);
+        };
+
+        // --- CRUD OPERATIONS ---
+        const generateInvoiceNumber = () => {
+          const now = new Date();
+          const month = String(now.getMonth() + 1).padStart(2, "0");
+          const year = now.getFullYear();
+          const invoicesThisMonth = db.invoices.filter((inv) =>
+            inv.invoiceNumber.startsWith(`GTJ/${month}/${year}`)
+          );
+          const lastNumber = invoicesThisMonth.reduce((max, inv) => {
+            const num = parseInt(inv.invoiceNumber.split("/").pop(), 10);
+            return num > max ? num : max;
+          }, 0);
+          return `GTJ/${month}/${year}/${lastNumber + 1}`;
+        };
+
+        const resetForm = () => {
+          editInvoiceId.value = "";
+          formTitle.textContent = "Buat Invoice Baru";
+          clientNameInput.value = "";
+          clientAddressInput.value = "";
+          paymentTypeInput.value = "";
+          paymentAccountInput.value = "";
+          paymentNameInput.value = "";
+          itemsContainer.innerHTML = "";
+          addNewItemRow();
+          updateFormPreview();
+        };
+
+        const handleShowForm = () => {
+          resetForm();
+          switchView("form");
+        };
+
+        const handleSaveInvoice = () => {
+          const id = editInvoiceId.value || Date.now().toString();
+          const isEditing = !!editInvoiceId.value;
+          const items = Array.from(itemsContainer.querySelectorAll(".item-row"))
+            .map((row) => ({
+              name: row.querySelector('[name="itemName"]').value,
+              qty: parseFloat(row.querySelector('[name="itemQty"]').value) || 0,
+              price:
+                parseFloat(row.querySelector('[name="itemPrice"]').value) || 0,
+            }))
+            .filter((item) => item.name && item.qty > 0);
+
+          if (!clientNameInput.value || items.length === 0) {
+            alert("Nama Klien dan minimal satu barang harus diisi.");
+            return;
+          }
+
+          const invoiceData = {
+            id,
+            invoiceNumber: isEditing
+              ? db.invoices.find((i) => i.id === id).invoiceNumber
+              : generateInvoiceNumber(),
+            date: isEditing
+              ? db.invoices.find((i) => i.id === id).date
+              : new Date().toLocaleDateString("id-ID", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                }),
+            dateISO: isEditing
+              ? db.invoices.find((i) => i.id === id).dateISO
+              : new Date().toISOString(),
+            client: {
+              name: clientNameInput.value,
+              address: clientAddressInput.value,
+            },
+            items,
+            payment: {
+              type: paymentTypeInput.value,
+              account: paymentAccountInput.value,
+              name: paymentNameInput.value,
+            },
+            status: isEditing
+              ? db.invoices.find((inv) => inv.id === id).status
+              : "Belum Lunas",
+          };
+
+          if (isEditing) {
+            db.invoices = db.invoices.map((inv) =>
+              inv.id === id ? invoiceData : inv
+            );
+          } else {
+            db.invoices.push(invoiceData);
+          }
+
+          saveStateToLocalStorage();
+          renderInvoiceList();
+          switchView("list");
+        };
+
+        const handleEditInvoice = (id) => {
+          const invoice = db.invoices.find((inv) => inv.id === id);
+          if (!invoice) return;
+          resetForm();
+          editInvoiceId.value = id;
+          formTitle.textContent = "Edit Invoice";
+          clientNameInput.value = invoice.client.name;
+          clientAddressInput.value = invoice.client.address;
+          paymentTypeInput.value = invoice.payment.type;
+          paymentAccountInput.value = invoice.payment.account;
+          paymentNameInput.value = invoice.payment.name;
+          itemsContainer.innerHTML = "";
+          invoice.items.forEach((item) =>
+            addNewItemRow(item.name, item.qty, item.price)
+          );
+          updateFormPreview();
+          switchView("form");
+        };
+
+        const handleDeleteInvoice = (id) => {
+          invoiceToDeleteId = id;
+          deleteModal.style.display = "block";
+          deleteModalBackdrop.style.display = "block";
+        };
+
+        const confirmDelete = () => {
+          db.invoices = db.invoices.filter(
+            (inv) => inv.id !== invoiceToDeleteId
+          );
+          saveStateToLocalStorage();
+          renderInvoiceList(filterInput.value);
+          closeDeleteModal();
+        };
+
+        const closeDeleteModal = () => {
+          invoiceToDeleteId = null;
+          deleteModal.style.display = "none";
+          deleteModalBackdrop.style.display = "none";
+        };
+
+        const handleToggleStatus = (id) => {
+          db.invoices = db.invoices.map((inv) => {
+            if (inv.id === id) {
+              return {
+                ...inv,
+                status: inv.status === "Lunas" ? "Belum Lunas" : "Lunas",
+              };
+            }
+            return inv;
+          });
+          saveStateToLocalStorage();
+          renderInvoiceList(filterInput.value);
+        };
+
+        const addNewItemRow = (name = "", qty = 1, price = 0) => {
+          const itemRow = document.createElement("div");
+          itemRow.className = "item-row grid grid-cols-12 gap-2 items-center";
+          itemRow.innerHTML = `
+                <div class="col-span-5"><input type="text" name="itemName" placeholder="Nama Barang" class="item-input w-full p-2 border border-gray-300 rounded-lg text-sm" value="${name}"></div>
+                <div class="col-span-2"><input type="number" name="itemQty" value="${qty}" min="1" class="item-input w-full p-2 border border-gray-300 rounded-lg text-sm"></div>
+                <div class="col-span-4"><input type="number" name="itemPrice" value="${price}" min="0" class="item-input w-full p-2 border border-gray-300 rounded-lg text-sm"></div>
+                <div class="col-span-1"><button class="remove-item-btn bg-[#ed4b00] text-white p-2 rounded-lg hover:bg-[#c93f00] w-full">-</button></div>
+            `;
+          itemsContainer.appendChild(itemRow);
+        };
+
+        // --- SETTINGS MODAL ---
+        const openSettingsModal = () => {
+          settingsBrandName.value = db.settings.name || "";
+          settingsLogoPreview.src =
+            db.settings.logoData ||
+            "https://placehold.co/150x50/e2e8f0/4a5568?text=Logo";
+          tempLogoData = db.settings.logoData;
+          settingsModal.style.display = "block";
+          settingsModalBackdrop.style.display = "block";
+        };
+
+        const closeSettingsModal = () => {
+          settingsModal.style.display = "none";
+          settingsModalBackdrop.style.display = "none";
+          settingsBrandLogo.value = "";
+          tempLogoData = null;
+        };
+
+        const handleSaveSettings = () => {
+          db.settings.name = settingsBrandName.value;
+          db.settings.logoData = tempLogoData;
+          saveStateToLocalStorage();
+          closeSettingsModal();
+        };
+
+        settingsBrandLogo.addEventListener("change", (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              tempLogoData = event.target.result;
+              settingsLogoPreview.src = tempLogoData;
+            };
+            reader.readAsDataURL(file);
+          }
+        });
+
+        // --- EVENT LISTENERS ---
+        dbLoader.addEventListener("change", handleLoadDbFromFile);
+        saveDbBtn.addEventListener("click", downloadDbAsFile);
+        filterInput.addEventListener("input", (e) =>
+          renderInvoiceList(e.target.value)
+        );
+        showFormBtn.addEventListener("click", handleShowForm);
+        cancelBtn.addEventListener("click", () => switchView("list"));
+        saveInvoiceBtn.addEventListener("click", handleSaveInvoice);
+        addItemBtn.addEventListener("click", () => addNewItemRow());
+        confirmDeleteBtn.addEventListener("click", confirmDelete);
+        cancelDeleteBtn.addEventListener("click", closeDeleteModal);
+        deleteModalBackdrop.addEventListener("click", closeDeleteModal);
+        settingsBtn.addEventListener("click", openSettingsModal);
+        saveSettingsBtn.addEventListener("click", handleSaveSettings);
+        cancelSettingsBtn.addEventListener("click", closeSettingsModal);
+
+        document.body.addEventListener("input", (e) => {
+          if (e.target.closest("#invoiceFormSection")) {
+            updateFormPreview();
+          }
+        });
+
+        document.body.addEventListener("click", (e) => {
+          if (e.target.classList.contains("remove-item-btn")) {
+            e.target.closest(".item-row").remove();
+            updateFormPreview();
+          } else if (e.target.classList.contains("edit-btn")) {
+            handleEditInvoice(e.target.dataset.id);
+          } else if (e.target.classList.contains("delete-btn")) {
+            handleDeleteInvoice(e.target.dataset.id);
+          } else if (e.target.classList.contains("status-toggle")) {
+            handleToggleStatus(e.target.dataset.id);
+          } else if (e.target.classList.contains("print-btn")) {
+            handlePrintInvoice(e.target.dataset.id);
+          }
+        });
+
+        // --- INITIALIZATION ---
+        const init = () => {
+          if (loadStateFromLocalStorage()) {
+            // Data loaded from browser, app is ready
+          } else {
+            // No data in browser, db uses default value.
+            // App is still ready to be used.
+          }
+          switchView("list");
+          renderInvoiceList();
+          updateSaveChangesButtonState();
+        };
+
+        init();
+      });
+    </script>
+  </body>
+</html>
